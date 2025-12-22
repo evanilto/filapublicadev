@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Consulta da Fila Cirúrgica</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+
+<body class="bg-light">
+
+<nav class="navbar navbar-light bg-white shadow-sm mb-4">
+    <div class="container">
+        <span class="navbar-brand mb-0 h1">
+            Hospital Universitário – Consulta Cirúrgica
+        </span>
+    </div>
+</nav>
+
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-5">
+
+            <div class="card shadow-sm">
+                <div class="card-body">
+
+                    <h5 class="card-title text-center mb-4">
+                        Consulta da Fila Cirúrgica
+                    </h5>
+
+                    <div class="mb-3">
+                        <label class="form-label">
+                            Código informado pelo hospital
+                        </label>
+                        <input type="text" id="codigo"
+                               class="form-control"
+                               placeholder="Ex: A7F3K9"
+                               maxlength="20">
+                    </div>
+
+                    <div class="d-grid">
+                        <button class="btn btn-primary" onclick="consultarFila()">
+                            Consultar
+                        </button>
+                    </div>
+
+                    <div id="resultado" class="mt-4 d-none">
+                        <hr>
+                        <p><strong>Status:</strong> <span id="status"></span></p>
+                        <p><strong>Sua posição:</strong> <span id="posicao"></span></p>
+                        <p><strong>Pacientes à frente:</strong> <span id="frente"></span></p>
+                        <p class="text-muted small">
+                            Última atualização:
+                            <span id="atualizacao"></span>
+                        </p>
+                    </div>
+
+                    <div id="erro" class="alert alert-danger mt-3 d-none"></div>
+
+                    <div class="alert alert-warning mt-4 small">
+                        ⚠️ A posição na fila é informativa e pode sofrer alterações
+                        conforme critérios clínicos e emergenciais.
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+async function consultarFila() {
+    const codigo = document.getElementById('codigo').value.trim();
+    const erro = document.getElementById('erro');
+    const resultado = document.getElementById('resultado');
+
+    erro.classList.add('d-none');
+    resultado.classList.add('d-none');
+
+    if (!codigo) {
+        erro.innerText = 'Informe o código.';
+        erro.classList.remove('d-none');
+        return;
+    }
+
+    try {
+        // 1️⃣ Solicita token HMAC
+        const tokenResp = await fetch('/api/public/fila/token', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ codigo })
+        });
+
+        const tokenData = await tokenResp.json();
+
+        alert('token response', tokenData);
+
+        if (tokenData.erro) throw tokenData.erro;
+
+        // 2️⃣ Consulta protegida
+        const url = `/api/public/fila/consulta?codigo=${codigo}`
+                  + `&token=${tokenData.token}`
+                  + `&exp=${tokenData.exp}`;
+
+        const resp = await fetch(url);
+        const data = await resp.json();
+        if (data.erro) throw data.erro;
+
+        document.getElementById('status').innerText = data.status;
+        document.getElementById('posicao').innerText = data.posicao;
+        document.getElementById('frente').innerText = data.pacientes_a_frente;
+        document.getElementById('atualizacao').innerText = data.ultima_atualizacao;
+
+        resultado.classList.remove('d-none');
+
+    } catch (e) {
+        erro.innerText = e;
+        erro.classList.remove('d-none');
+    }
+}
+</script>
+
+</body>
+</html>

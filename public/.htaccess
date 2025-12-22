@@ -1,0 +1,17 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # 1️⃣ Raiz → HTML público
+    RewriteRule ^$ consulta-fila.html [L]
+
+    # 2️⃣ Arquivos reais
+    RewriteCond %{REQUEST_FILENAME} -f
+    RewriteRule ^ - [L]
+
+    # 3️⃣ Diretórios reais
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # 4️⃣ API / CodeIgniter
+    RewriteRule ^ index.php [L]
+</IfModule>
