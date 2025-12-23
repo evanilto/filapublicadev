@@ -1,6 +1,8 @@
 <?php
 
 namespace App\Controllers;  
+
+use App\Models\VwFilaPublicaModel as FilaModel;
 class FilaPublicaController extends BaseController
 // Controlador para acesso público à fila
 // Métodos: token() e consulta()
@@ -57,18 +59,23 @@ class FilaPublicaController extends BaseController
             "Consulta pública IP={$ip} codigo={$codigo}"
         );
 
+        $filamodel = new FilaModel();
+        $resultado = $filamodel->consultarFila($codigo);
+
+        return $this->response->setJSON($resultado);
+
        /*  return $this->response->setJSON(
             $this->filaModel->consultaPublica($codigo)
         ); */
         // SUCESSO MOCKED
-        return $this->response
+        /* return $this->response
         ->setHeader('Content-Type', 'application/json')
         ->setJSON([
             'status' => 'Em atendimento',
             'posicao' => 5,
             'pacientes_a_frente' => 4,
             'ultima_atualizacao' => date('Y-m-d H:i:s'),
-        ]);
+        ]); */
         // ERRO MOCKED
         /* return $this->response
         ->setStatusCode(401)
