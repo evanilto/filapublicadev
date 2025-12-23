@@ -1,4 +1,9 @@
+<?php
+
+namespace App\Controllers;  
 class FilaPublicaController extends BaseController
+// Controlador para acesso público à fila
+// Métodos: token() e consulta()
 {
     public function consulta()
     {
@@ -7,8 +12,6 @@ class FilaPublicaController extends BaseController
         $exp    = (int) $this->request->getGet('exp');
         $ip     = $this->request->getIPAddress();
 
-        dd('here');
-        
         // 🔐 Valida presença
         if (!$codigo || !$token || !$exp) {
             log_message('warning',"Tentativa inválida IP={$ip} codigo={$codigo}");
@@ -54,20 +57,44 @@ class FilaPublicaController extends BaseController
             "Consulta pública IP={$ip} codigo={$codigo}"
         );
 
-        return $this->response->setJSON(
+       /*  return $this->response->setJSON(
             $this->filaModel->consultaPublica($codigo)
-        );
-    }
+        ); */
+        // SUCESSO MOCKED
+        return $this->response
+        ->setHeader('Content-Type', 'application/json')
+        ->setJSON([
+            'status' => 'Em atendimento',
+            'posicao' => 5,
+            'pacientes_a_frente' => 4,
+            'ultima_atualizacao' => date('Y-m-d H:i:s'),
+        ]);
+        // ERRO MOCKED
+        /* return $this->response
+        ->setStatusCode(401)
+        ->setJSON([
+            'erro' => 'Token inválido ou expirado - Entre em contato com a TI do HUAP'
+        ]); */
 
+    }
     // Gera token HMAC para consulta segura
+    // Requer código público válido
     public function token()
     {
-        $codigo = $this->request->getPost('codigo');
+        $data   = $this->request->getJSON(true);
+        $codigo = $data['codigo'] ?? null;
         $ip     = $this->request->getIPAddress();
 
         if (!$codigo) {
-            return $this->response->setJSON(['erro' => 'Código obrigatório']);
+            return $this->response
+                ->setStatusCode(400)
+                ->setJSON(['erro' => 'Código obrigatório']);
         }
+
+        /* return $this->response->setJSON([
+            'codigo' => $codigo,
+            'ip'     => $ip
+        ]); */
 
         // 🔐 Rate limit adicional por código
         $keyCodigo = 'rl_codigo_' . md5($codigo);
@@ -81,9 +108,9 @@ class FilaPublicaController extends BaseController
         cache()->save($keyCodigo, $tentativas + 1, 300);
 
         // 🔎 Valida código público (BD)
-        if (!$this->filaModel->codigoValido($codigo)) {
+       /*  if (!$this->filaModel->codigoValido($codigo)) {
             return $this->response->setJSON(['erro' => 'Código inválido']);
-        }
+        } */
 
         // 🔑 Gera HMAC
         $expiraEm = time() + 120; // 2 minutos
@@ -98,6 +125,7 @@ class FilaPublicaController extends BaseController
         ]);
     }
     // Gera código público único
+    // Usado internamente ao criar nova entrada na fila
     function gerarCodigoPublico()
     {
         return strtoupper(bin2hex(random_bytes(3)));

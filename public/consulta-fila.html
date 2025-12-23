@@ -90,24 +90,87 @@ async function consultarFila() {
         // 1️⃣ Solicita token HMAC
         const tokenResp = await fetch('/api/public/fila/token', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
             body: JSON.stringify({ codigo })
         });
 
-        const tokenData = await tokenResp.json();
+        /* if (!tokenResp.ok) {
+            const errorText = await tokenResp.text();
+            console.error('Erro do servidor:', errorText);
+            throw new Error(`Erro HTTP ${tokenResp.status}`);
+        } */
 
-        alert('token response', tokenData);
+        var contentType = tokenResp.headers.get('content-type');
+
+        if (!contentType || !contentType.includes('application/json')) {
+            const text = await tokenResp.text();
+            console.error('Resposta NÃO é JSON:', text);
+            throw new Error('Resposta inválida (não JSON)');
+        }
+
+        const tokenData = await tokenResp.json();
 
         if (tokenData.erro) throw tokenData.erro;
 
-        // 2️⃣ Consulta protegida
-        const url = `/api/public/fila/consulta?codigo=${codigo}`
-                  + `&token=${tokenData.token}`
-                  + `&exp=${tokenData.exp}`;
+        if (
+            !tokenData ||
+            typeof tokenData !== 'object'
+        ) {
+            throw new Error(`Resposta inválida do servidor - Erro HTTP ${tokenResp.status}`);
+        }
 
-        const resp = await fetch(url);
+        if (
+            !('token' in tokenData) ||
+            typeof tokenData.token !== 'string' ||
+            tokenData.token.trim() === ''
+        ) {
+            console.error('Token ausente ou inválido:', tokenData);
+
+            const msg =
+                tokenData.erro ||
+                tokenData.mensagem ||
+                'Token não retornado pela API';
+
+            throw new Error(msg);
+        }
+
+        if (tokenData.erro) throw new Error(tokenData.erro);
+
+        // 2️⃣ Consulta Fila com token
+        const url = `/api/public/fila/consulta?codigo=${encodeURIComponent(codigo)}`
+            + `&token=${encodeURIComponent(tokenData.token)}`
+            + `&exp=${encodeURIComponent(tokenData.exp)}`;
+
+        const resp = await fetch(url, {
+            headers: {
+                'Accept': 'application/json'
+            }
+        });
+
+        console.log({
+            status: resp.status,
+            ok: resp.ok,
+            contentType: resp.headers.get('content-type')
+        });
+
+        if (!resp.ok) {
+            const errorText = await resp.text();
+            throw new Error(`Erro HTTP ${resp.status}: ${errorText}`);
+        }
+
+        contentType = resp.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            const raw = await resp.text();
+            throw new Error('Resposta inválida (não JSON): ' + raw);
+        }
+
         const data = await resp.json();
-        if (data.erro) throw data.erro;
+        console.log('consulta response', data);
+
+        if (data.erro) throw new Error(data.erro);
 
         document.getElementById('status').innerText = data.status;
         document.getElementById('posicao').innerText = data.posicao;
