@@ -1,0 +1,181 @@
+openapi: 3.0.3
+
+info:
+  title: API Pública – Consulta da Fila Cirúrgica
+  description: >
+    API pública para consulta da posição do paciente na fila cirúrgica.
+    A API expõe apenas dados administrativos mínimos e aplica
+    rate limit, tokens temporários e proteção contra abuso.
+  version: "1.0.0"
+
+servers:
+  - url: https://seu-dominio.gov.br
+    description: Produção
+
+tags:
+  - name: Fila Pública
+    description: Consulta pública da fila cirúrgica
+
+paths:
+  /api/public/fila/token:
+    post:
+      tags: [Fila Pública]
+      summary: Gera token temporário para consulta
+      description: >
+        Gera um token HMAC de curta duração (2 minutos),
+        necessário para realizar a consulta da fila.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TokenRequest"
+      responses:
+        "200":
+          description: Token gerado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenSuccess"
+        "400":
+          description: Requisição inválida
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Muitas requisições
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Tempo em segundos para nova tentativa
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/public/fila/consulta:
+    get:
+      tags: [Fila Pública]
+      summary: Consulta posição na fila cirúrgica
+      description: >
+        Retorna a posição do paciente em todas as filas em que
+        o prontuário está cadastrado.
+      parameters:
+        - name: codigo
+          in: query
+          required: true
+          description: Número do prontuário
+          schema:
+            type: string
+        - name: token
+          in: query
+          required: true
+          description: Token temporário HMAC
+          schema:
+            type: string
+        - name: exp
+          in: query
+          required: true
+          description: Timestamp UNIX de expiração do token
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Consulta realizada com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsultaSuccess"
+        "401":
+          description: Token inválido ou expirado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Muitas requisições
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Tempo em segundos para nova tentativa
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  schemas:
+
+    TokenRequest:
+      type: object
+      required: [codigo]
+      properties:
+        codigo:
+          type: string
+          example: "123456"
+
+    TokenSuccess:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            token:
+              type: string
+              example: "f1a9c0c5e4b8..."
+            exp:
+              type: integer
+              example: 1706880000
+
+    ConsultaSuccess:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            registros:
+              type: array
+              items:
+                $ref: "#/components/schemas/FilaRegistro"
+
+    FilaRegistro:
+      type: object
+      properties:
+        nome:
+          type: string
+          example: "João da Silva"
+        fila:
+          type: string
+          example: "Ortopedia"
+        status:
+          type: string
+          example: "Ativo"
+        posicao:
+          type: integer
+          example: 5
+        pacientes_a_frente:
+          type: integer
+          example: 4
+        ultima_atualizacao:
+          type: string
+          format: date-time
+          example: "2026-02-02 14:20:00"
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+          example: "Paciente não encontrado na fila"

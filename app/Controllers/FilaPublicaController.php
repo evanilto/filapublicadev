@@ -1,44 +1,102 @@
 <?php
 
-namespace App\Controllers;  
+namespace App\Controllers;
 
 use App\Models\VwFilaPublicaModel as FilaModel;
+
 class FilaPublicaController extends BaseController
-// Controlador para acesso público à fila
-// Métodos: token() e consulta()
 {
+    /* =====================================================
+       GERA TOKEN TEMPORÁRIO
+       ===================================================== */
+    public function token()
+    {
+        $data   = $this->request->getJSON(true);
+        $codigo = $data['codigo'] ?? null;
+
+        if (!$codigo) {
+            return $this->response
+                ->setStatusCode(400)
+                ->setJSON([
+                    'success' => false,
+                    'error'   => 'Código obrigatório'
+                ]);
+        }
+
+        /* Rate limit adicional por código */
+        $keyCodigo  = 'rl_codigo_' . md5($codigo);
+        $tentativas = cache()->get($keyCodigo) ?? 0;
+
+        if ($tentativas >= 5) {
+            return $this->response
+                ->setStatusCode(429)
+                ->setJSON([
+                    'success' => false,
+                    'error'   => 'Código temporariamente bloqueado'
+                ]);
+        }
+
+        cache()->save($keyCodigo, $tentativas + 1, 300);
+
+        /* Geração do token */
+        $expiraEm = time() + 120; // 2 minutos
+        $payload  = $codigo . '|' . $expiraEm;
+        $token    = hash_hmac('sha256', $payload, getenv('HMAC_SECRET'));
+
+        cache()->save('hmac_' . $token, true, 120);
+
+        return $this->response->setJSON([
+            'success' => true,
+            'data' => [
+                'token' => $token,
+                'exp'   => $expiraEm
+            ]
+        ]);
+    }
+
+    /* =====================================================
+       CONSULTA DA FILA
+       ===================================================== */
     public function consulta()
     {
         $codigo = $this->request->getGet('codigo');
         $token  = $this->request->getGet('token');
         $exp    = (int) $this->request->getGet('exp');
-        $ip     = $this->request->getIPAddress();
 
-        // 🔐 Valida presença
+        /* Validação de parâmetros */
         if (!$codigo || !$token || !$exp) {
-            log_message('warning',"Tentativa inválida IP={$ip} codigo={$codigo}");
-
-            return $this->response->setStatusCode(401)
-                ->setJSON(['erro' => 'Token inválido']);
+            return $this->response
+                ->setStatusCode(401)
+                ->setJSON([
+                    'success' => false,
+                    'error'   => 'Parâmetros inválidos'
+                ]);
         }
 
-        // ⏳ Valida expiração
+        /* Token expirado */
         if (time() > $exp) {
-            log_message('warning',"Tentativa inválida IP={$ip} codigo={$codigo}");
-
-            return $this->response->setJSON(['erro' => 'Token expirado']);
+            return $this->response
+                ->setStatusCode(401)
+                ->setJSON([
+                    'success' => false,
+                    'error'   => 'Token expirado'
+                ]);
         }
 
-        // Validar uso único
+        /* Uso único */
         if (!cache()->get('hmac_' . $token)) {
-            log_message('warning',"Tentativa inválida IP={$ip} codigo={$codigo}");
-
-            return $this->response->setJSON(['erro' => 'Token já utilizado']);
+            return $this->response
+                ->setStatusCode(401)
+                ->setJSON([
+                    'success' => false,
+                    'error'   => 'Token inválido ou já utilizado'
+                ]);
         }
+
         cache()->delete('hmac_' . $token);
 
-        // 🔑 Recalcula HMAC
-        $payloadEsperado = $codigo . '|' . $exp . '|' . $ip;
+        /* Validação HMAC */
+        $payloadEsperado = $codigo . '|' . $exp;
         $tokenEsperado   = hash_hmac(
             'sha256',
             $payloadEsperado,
@@ -46,96 +104,44 @@ class FilaPublicaController extends BaseController
         );
 
         if (!hash_equals($tokenEsperado, $token)) {
-            log_message('warning',"Tentativa inválida IP={$ip} codigo={$codigo}");
-
-            sleep(2);
-            return $this->response->setStatusCode(401)
-                ->setJSON(['erro' => 'Token inválido']);
-        }
-
-        // 🔎 Consulta segura
-        log_message(
-            'info',
-            "Consulta pública IP={$ip} codigo={$codigo}"
-        );
-
-        $filamodel = new FilaModel();
-        $resultado = $filamodel->consultarFila($codigo);
-
-        return $this->response->setJSON($resultado);
-
-       /*  return $this->response->setJSON(
-            $this->filaModel->consultaPublica($codigo)
-        ); */
-        // SUCESSO MOCKED
-        /* return $this->response
-        ->setHeader('Content-Type', 'application/json')
-        ->setJSON([
-            'status' => 'Em atendimento',
-            'posicao' => 5,
-            'pacientes_a_frente' => 4,
-            'ultima_atualizacao' => date('Y-m-d H:i:s'),
-        ]); */
-        // ERRO MOCKED
-        /* return $this->response
-        ->setStatusCode(401)
-        ->setJSON([
-            'erro' => 'Token inválido ou expirado - Entre em contato com a TI do HUAP'
-        ]); */
-
-    }
-    // Gera token HMAC para consulta segura
-    // Requer código público válido
-    public function token()
-    {
-        $data   = $this->request->getJSON(true);
-        $codigo = $data['codigo'] ?? null;
-        $ip     = $this->request->getIPAddress();
-
-        if (!$codigo) {
             return $this->response
-                ->setStatusCode(400)
-                ->setJSON(['erro' => 'Código obrigatório']);
+                ->setStatusCode(401)
+                ->setJSON([
+                    'success' => false,
+                    'error'   => 'Token inválido'
+                ]);
         }
 
-        /* return $this->response->setJSON([
-            'codigo' => $codigo,
-            'ip'     => $ip
-        ]); */
+        /* Consulta segura */
+        $model     = new FilaModel();
+        $resultado = $model->consultarFila($codigo);
 
-        // 🔐 Rate limit adicional por código
-        $keyCodigo = 'rl_codigo_' . md5($codigo);
-        $tentativas = cache()->get($keyCodigo) ?? 0;
-
-        if ($tentativas >= 5) {
-            sleep(2);
-            return $this->response->setJSON(['erro' => 'Código temporariamente bloqueado']);
+        /* Erro funcional (paciente não encontrado) */
+        if (isset($resultado['erro'])) {
+            return $this->response->setJSON([
+                'success' => false,
+                'error'   => $resultado['erro']
+            ]);
         }
 
-        cache()->save($keyCodigo, $tentativas + 1, 300);
+        /* Garantia de contrato */
+        if (
+            !isset($resultado['registros']) ||
+            !is_array($resultado['registros']) ||
+            count($resultado['registros']) === 0
+        ) {
+            return $this->response->setJSON([
+                'success' => false,
+                'error'   => 'Nenhuma fila encontrada para este prontuário'
+            ]);
+        }
 
-        // 🔎 Valida código público (BD)
-       /*  if (!$this->filaModel->codigoValido($codigo)) {
-            return $this->response->setJSON(['erro' => 'Código inválido']);
-        } */
-
-        // 🔑 Gera HMAC
-        $expiraEm = time() + 120; // 2 minutos
-        $payload  = $codigo . '|' . $expiraEm . '|' . $ip;
-        $token    = hash_hmac('sha256', $payload, getenv('HMAC_SECRET'));
-
-        cache()->save('hmac_' . $token, true, 120);
-
+        /* Sucesso */
         return $this->response->setJSON([
-            'token' => $token,
-            'exp'   => $expiraEm
+            'success' => true,
+            'data' => [
+                'registros' => $resultado['registros']
+            ]
         ]);
     }
-    // Gera código público único
-    // Usado internamente ao criar nova entrada na fila
-    function gerarCodigoPublico()
-    {
-        return strtoupper(bin2hex(random_bytes(3)));
-    }
-
 }

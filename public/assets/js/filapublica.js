@@ -1,24 +1,29 @@
+let ultimoCodigoConsultado = '';
+let countdownInterval = null;
+let tentativas429 = 0;
+
 document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btnConsultar')
         .addEventListener('click', consultarFila);
+
+    document.getElementById('codigo')
+        .addEventListener('input', limparResultadoAoEditar);
 });
 
 async function consultarFila() {
     const codigo = document.getElementById('codigo').value.trim();
-    const erro = document.getElementById('erro');
-    const resultado = document.getElementById('resultado');
 
-    erro.classList.add('d-none');
-    resultado.classList.add('d-none');
+    limparMensagens();
 
     if (!codigo) {
-        erro.innerText = 'Informe o código.';
-        erro.classList.remove('d-none');
+        mostrarErro('Informe o número do prontuário.');
         return;
     }
 
     try {
-        // 1️⃣ Solicita token HMAC
+        /* =========================
+           TOKEN
+        ========================== */
         const tokenResp = await fetch('/api/public/fila/token', {
             method: 'POST',
             headers: {
@@ -28,90 +33,190 @@ async function consultarFila() {
             body: JSON.stringify({ codigo })
         });
 
-        /* if (!tokenResp.ok) {
-            const errorText = await tokenResp.text();
-            console.error('Erro do servidor:', errorText);
-            throw new Error(`Erro HTTP ${tokenResp.status}`);
-        } */
+        const tokenData = await lerJsonSeguro(tokenResp);
 
-        var contentType = tokenResp.headers.get('content-type');
-
-        if (!contentType || !contentType.includes('application/json')) {
-            const text = await tokenResp.text();
-            console.error('Resposta NÃO é JSON:', text);
-            throw new Error('Resposta inválida (não JSON)');
+        if (!tokenResp.ok) {
+            tratarErroHttp(tokenResp, tokenData);
+            return;
         }
 
-        const tokenData = await tokenResp.json();
-
-        if (tokenData.erro) throw tokenData.erro;
-
-        if (
-            !tokenData ||
-            typeof tokenData !== 'object'
-        ) {
-            throw new Error(`Resposta inválida do servidor - Erro HTTP ${tokenResp.status}`);
+        if (!tokenData.success) {
+            throw new Error(tokenData.error || 'Erro ao solicitar token');
         }
 
-        if (
-            !('token' in tokenData) ||
-            typeof tokenData.token !== 'string' ||
-            tokenData.token.trim() === ''
-        ) {
-            console.error('Token ausente ou inválido:', tokenData);
+        tentativas429 = 0;
 
-            const msg =
-                tokenData.erro ||
-                tokenData.mensagem ||
-                'Token não retornado pela API';
-
-            throw new Error(msg);
-        }
-
-        if (tokenData.erro) throw new Error(tokenData.erro);
-
-        // 2️⃣ Consulta Fila com token
-        const url = `/api/public/fila/consulta?codigo=${encodeURIComponent(codigo)}`
-            + `&token=${encodeURIComponent(tokenData.token)}`
-            + `&exp=${encodeURIComponent(tokenData.exp)}`;
+        /* =========================
+           CONSULTA
+        ========================== */
+        const url =
+            `/api/public/fila/consulta?codigo=${encodeURIComponent(codigo)}` +
+            `&token=${encodeURIComponent(tokenData.data.token)}` +
+            `&exp=${encodeURIComponent(tokenData.data.exp)}`;
 
         const resp = await fetch(url, {
-            headers: {
-                'Accept': 'application/json'
-            }
+            headers: { 'Accept': 'application/json' }
         });
 
-        console.log({
-            status: resp.status,
-            ok: resp.ok,
-            contentType: resp.headers.get('content-type')
-        });
+        const data = await lerJsonSeguro(resp);
 
         if (!resp.ok) {
-            const errorText = await resp.text();
-            throw new Error(`Erro HTTP ${resp.status}: ${errorText}`);
+            tratarErroHttp(resp, data);
+            return;
         }
 
-        contentType = resp.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-            const raw = await resp.text();
-            throw new Error('Resposta inválida (não JSON): ' + raw);
+        if (!data.success) {
+            throw new Error(data.error || 'Consulta inválida');
         }
 
-        const data = await resp.json();
-        console.log('consulta response', data);
-
-        if (data.erro) throw new Error(data.erro);
-
-        document.getElementById('status').innerText = data.status;
-        document.getElementById('posicao').innerText = data.posicao;
-        document.getElementById('frente').innerText = data.pacientes_a_frente;
-        document.getElementById('atualizacao').innerText = data.ultima_atualizacao;
-
-        resultado.classList.remove('d-none');
+        renderizarResultado(data.data, codigo);
 
     } catch (e) {
-        erro.innerText = e;
-        erro.classList.remove('d-none');
+        mostrarErro(e.message || 'Erro inesperado');
     }
+}
+
+/* =========================
+   UTILITÁRIOS DE HTTP
+========================== */
+async function lerJsonSeguro(resp) {
+    try {
+        return await resp.json();
+    } catch {
+        return { success: false, error: 'Resposta inválida do servidor' };
+    }
+}
+
+function tratarErroHttp(resp, data) {
+    if (resp.status === 429) {
+        const retryAfter = resp.headers.get('Retry-After');
+        aplicarBackoff(
+            data.error || 'Muitas requisições.',
+            retryAfter
+        );
+        return;
+    }
+
+    throw new Error(data.error || 'Erro de comunicação');
+}
+
+/* =========================
+   BACKOFF EXPONENCIAL
+========================== */
+function aplicarBackoff(mensagem, retryAfterHeader) {
+    tentativas429++;
+
+    const base = retryAfterHeader
+        ? parseInt(retryAfterHeader, 10)
+        : 60;
+
+    const segundos = Math.min(
+        base * Math.pow(2, tentativas429 - 1),
+        600
+    );
+
+    iniciarBloqueio(mensagem, segundos);
+}
+
+/* =========================
+   BLOQUEIO + CONTAGEM
+========================== */
+function iniciarBloqueio(mensagem, segundos) {
+    const erro = document.getElementById('erro');
+    const btn = document.getElementById('btnConsultar');
+
+    if (countdownInterval) {
+        clearInterval(countdownInterval);
+    }
+
+    let restante = segundos;
+    btn.disabled = true;
+
+    erro.classList.remove('d-none');
+    erro.innerText = `${mensagem} Aguarde ${restante}s.`;
+
+    countdownInterval = setInterval(() => {
+        restante--;
+
+        if (restante <= 0) {
+            clearInterval(countdownInterval);
+            countdownInterval = null;
+            btn.disabled = false;
+            erro.classList.add('d-none');
+        } else {
+            erro.innerText = `${mensagem} Aguarde ${restante}s.`;
+        }
+    }, 1000);
+}
+
+/* =========================
+   RENDER SEGURO
+========================== */
+function renderizarResultado(data, codigo) {
+    if (!Array.isArray(data.registros) || data.registros.length === 0) {
+        throw new Error('Nenhuma fila encontrada para este prontuário');
+    }
+
+    document.getElementById('nome').innerText =
+        data.registros[0].nome;
+
+    const lista = document.getElementById('listaFilas');
+    lista.innerHTML = '';
+
+    data.registros.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'card card-fila';
+
+        card.innerHTML = `
+            <div class="card-body">
+                <h6 class="fw-semibold mb-2">${item.fila}</h6>
+                <div class="info-line mb-1">
+                    <span>Status</span>
+                    <span>${item.status}</span>
+                </div>
+                <div class="info-line mb-1">
+                    <span>Sua posição</span>
+                    <span class="fw-bold">${item.posicao}</span>
+                </div>
+                <div class="info-line">
+                    <span>Pacientes à frente</span>
+                    <span>${item.pacientes_a_frente}</span>
+                </div>
+            </div>
+        `;
+
+        lista.appendChild(card);
+    });
+
+    document.getElementById('atualizacao').innerText =
+        data.registros[0].ultima_atualizacao;
+
+    ultimoCodigoConsultado = codigo;
+    document.getElementById('resultado').classList.remove('d-none');
+}
+
+/* =========================
+   LIMPEZA AO EDITAR
+========================== */
+function limparResultadoAoEditar() {
+    const atual = document.getElementById('codigo').value;
+
+    if (atual !== ultimoCodigoConsultado) {
+        limparMensagens();
+        document.getElementById('listaFilas').innerHTML = '';
+    }
+}
+
+function limparMensagens() {
+    document.getElementById('resultado').classList.add('d-none');
+    document.getElementById('erro').classList.add('d-none');
+}
+
+/* =========================
+   ERRO PADRÃO
+========================== */
+function mostrarErro(msg) {
+    const erro = document.getElementById('erro');
+    erro.innerText = msg;
+    erro.classList.remove('d-none');
 }
