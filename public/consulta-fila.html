@@ -25,9 +25,13 @@
         }
 
         .logo-inst {
-            width: 52px;
-            height: 52px;
+            max-width: 95%;
+            height: auto;
+            max-height: 64px;
         }
+
+    
+
 
         @media (min-width: 768px) {
             body {
@@ -41,6 +45,25 @@
                 height: 64px;
             }
         }
+
+
+/* Mobile: permite até 2 linhas */
+@media (max-width: 575px) {
+    .nome-hospital {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+}
+
+/* Desktop: força 1 linha */
+@media (min-width: 576px) {
+    .nome-hospital {
+        white-space: nowrap;
+    }
+}
+
 
     </style>
 </head>
@@ -61,7 +84,7 @@
                             <img
                                 src="/assets/img/logo_completo.png"
                                 alt="Sistema Único de Saúde"
-                                class="logo-inst"
+                                class="logo-inst img-fluid"
                                 loading="lazy"
                             />
 
@@ -74,9 +97,10 @@
 
                         </div>
 
-                        <div class="fw-semibold" style="font-size: 0.95rem;">
-                            Hospital Universitário Antônio Pedro - HUAP-UFF
-                        </div>
+                        <div class="fw-semibold nome-hospital mx-auto">
+    Hospital Universitário Antônio Pedro - HUAP-UFF
+</div>
+
 
                     </div>
                     <hr><br>
