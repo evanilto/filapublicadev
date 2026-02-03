@@ -30,13 +30,14 @@ class FilaPublicaController extends BaseController
         if ($tentativas >= 5) {
             return $this->response
                 ->setStatusCode(429)
+                ->setHeader('Retry-After', '60')
                 ->setJSON([
                     'success' => false,
-                    'error'   => 'Código temporariamente bloqueado'
+                    'error'   => 'Muitas requisições para este prontuário. Aguarde 60 segundos.'
                 ]);
         }
 
-        cache()->save($keyCodigo, $tentativas + 1, 300);
+        cache()->save($keyCodigo, $tentativas + 1, 60);
 
         /* Geração do token */
         $expiraEm = time() + 120; // 2 minutos

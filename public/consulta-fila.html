@@ -24,30 +24,62 @@
             font-size: 0.95rem;
         }
 
+        .logo-inst {
+            width: 52px;
+            height: 52px;
+        }
+
         @media (min-width: 768px) {
             body {
                 font-size: 1.05rem;
             }
         }
+
+        @media (min-width: 768px) {
+            .logo-inst {
+                width: 64px;
+                height: 64px;
+            }
+        }
+
     </style>
 </head>
 
 <body class="bg-light">
-
-<nav class="navbar navbar-light bg-white shadow-sm mb-3">
-    <div class="container">
-        <span class="navbar-brand fw-semibold">
-            Hospital Universitário – Consulta Cirúrgica
-        </span>
-    </div>
-</nav>
-
 <div class="container px-3 px-md-0">
     <div class="row justify-content-center">
-        <div class="col-12 col-md-8 col-lg-6">
+        <div class="col-12 col-md-8 col-lg-6 col-xl-5">
 
             <div class="card shadow-sm">
                 <div class="card-body">
+
+                    <!-- IDENTIDADE INSTITUCIONAL -->
+                    <div class="text-center mb-3">
+
+                       <div class="d-flex justify-content-center gap-2 mb-2">
+
+                            <img
+                                src="/assets/img/logo_completo.png"
+                                alt="Sistema Único de Saúde"
+                                class="logo-inst"
+                                loading="lazy"
+                            />
+
+                            <!-- <img
+                                src="/assets/img/HUAP.png"
+                                alt="Empresa Brasileira de Serviços Hospitalares"
+                                class="logo-inst"
+                                loading="lazy"
+                            /> -->
+
+                        </div>
+
+                        <div class="fw-semibold" style="font-size: 0.95rem;">
+                            Hospital Universitário Antônio Pedro - HUAP-UFF
+                        </div>
+
+                    </div>
+                    <hr><br>
 
                     <h5 class="text-center mb-4">
                         Consulta da Fila Cirúrgica
@@ -99,6 +131,11 @@
                     <div class="alert alert-warning mt-4 small">
                         ⚠️ A posição na fila é informativa e pode sofrer alterações
                         conforme critérios clínicos e emergenciais.
+                    </div>
+
+                    <!-- FOOTER DO CARD -->
+                    <div class="text-center text-muted small mt-4 pt-2 border-top">
+                        v1.0 • Sistema de Consulta da Fila Cirúrgica
                     </div>
 
                 </div>

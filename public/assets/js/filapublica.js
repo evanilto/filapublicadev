@@ -1,6 +1,7 @@
 let ultimoCodigoConsultado = '';
 let countdownInterval = null;
 let tentativas429 = 0;
+let bloqueioAtivo = false;
 
 document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btnConsultar')
@@ -8,6 +9,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('codigo')
         .addEventListener('input', limparResultadoAoEditar);
+
+        // 🔹 ENTER no desktop dispara a consulta
+    document.getElementById('codigo')
+        .addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                document.getElementById('btnConsultar').click();
+            }
+        });
 });
 
 async function consultarFila() {
@@ -125,6 +135,8 @@ function iniciarBloqueio(mensagem, segundos) {
     const erro = document.getElementById('erro');
     const btn = document.getElementById('btnConsultar');
 
+    bloqueioAtivo = true; // 🔴 BLOQUEIO ATIVO
+
     if (countdownInterval) {
         clearInterval(countdownInterval);
     }
@@ -133,7 +145,7 @@ function iniciarBloqueio(mensagem, segundos) {
     btn.disabled = true;
 
     erro.classList.remove('d-none');
-    erro.innerText = `${mensagem} Aguarde ${restante}s.`;
+    erro.innerText = `🔒 ${mensagem} Aguarde ${restante}s.`;
 
     countdownInterval = setInterval(() => {
         restante--;
@@ -141,10 +153,14 @@ function iniciarBloqueio(mensagem, segundos) {
         if (restante <= 0) {
             clearInterval(countdownInterval);
             countdownInterval = null;
+
+            tentativas429 = 0; // 🔴 RESET DO BACKOFF
+            bloqueioAtivo = false; // 🔴 BLOQUEIO ENCERRA
+
             btn.disabled = false;
             erro.classList.add('d-none');
         } else {
-            erro.innerText = `${mensagem} Aguarde ${restante}s.`;
+            erro.innerText = `🔒 ${mensagem} Aguarde ${restante}s.`;
         }
     }, 1000);
 }
@@ -163,25 +179,32 @@ function renderizarResultado(data, codigo) {
     const lista = document.getElementById('listaFilas');
     lista.innerHTML = '';
 
-    data.registros.forEach(item => {
+   data.registros.forEach((item, index) => {
         const card = document.createElement('div');
         card.className = 'card card-fila';
 
+        const labelFila =
+        data.registros.length > 1
+            ? `Fila ${index + 1}`
+            : 'Fila';
+
         card.innerHTML = `
             <div class="card-body">
-                <h6 class="fw-semibold mb-2">${item.fila}</h6>
+                <h6 class="mb-2">
+                    <span class="text-muted">${labelFila}:</span>
+                    <span class="fw-semibold">${item.fila}</span>
+                </h6>
+
                 <div class="info-line mb-1">
-                    <span>Status</span>
+                    <span>Status: </span>
                     <span>${item.status}</span>
                 </div>
+
                 <div class="info-line mb-1">
-                    <span>Sua posição</span>
+                    <span>Sua posição: </span>
                     <span class="fw-bold">${item.posicao}</span>
                 </div>
-                <div class="info-line">
-                    <span>Pacientes à frente</span>
-                    <span>${item.pacientes_a_frente}</span>
-                </div>
+
             </div>
         `;
 
@@ -199,6 +222,11 @@ function renderizarResultado(data, codigo) {
    LIMPEZA AO EDITAR
 ========================== */
 function limparResultadoAoEditar() {
+
+    if (bloqueioAtivo) {
+        return; // 🔴 NÃO LIMPA MENSAGEM DURANTE BLOQUEIO
+    }
+
     const atual = document.getElementById('codigo').value;
 
     if (atual !== ultimoCodigoConsultado) {
