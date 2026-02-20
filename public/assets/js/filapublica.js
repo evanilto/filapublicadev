@@ -173,20 +173,29 @@ function renderizarResultado(data, codigo) {
         throw new Error('Nenhuma fila encontrada para este prontuário');
     }
 
+    const primeiro = data.registros[0];
+
+    // 🔹 Dados do paciente
     document.getElementById('nome').innerText =
-        data.registros[0].nome;
+        primeiro.nome || '-';
+
+    document.getElementById('cpf').innerText =
+        primeiro.cpf || '-';
+
+    document.getElementById('dt_nascimento').innerText =
+        primeiro.dt_nascimento || '-';
 
     const lista = document.getElementById('listaFilas');
     lista.innerHTML = '';
 
-   data.registros.forEach((item, index) => {
+    data.registros.forEach((item, index) => {
         const card = document.createElement('div');
         card.className = 'card card-fila';
 
         const labelFila =
-        data.registros.length > 1
-            ? `Fila ${index + 1}`
-            : 'Fila';
+            data.registros.length > 1
+                ? `Fila ${index + 1}`
+                : 'Fila';
 
         card.innerHTML = `
             <div class="card-body">
@@ -204,7 +213,6 @@ function renderizarResultado(data, codigo) {
                     <span>Sua posição: </span>
                     <span class="fw-bold">${item.posicao}</span>
                 </div>
-
             </div>
         `;
 
@@ -212,12 +220,11 @@ function renderizarResultado(data, codigo) {
     });
 
     document.getElementById('atualizacao').innerText =
-        data.registros[0].ultima_atualizacao;
+        primeiro.ultima_atualizacao || '-';
 
     ultimoCodigoConsultado = codigo;
     document.getElementById('resultado').classList.remove('d-none');
 }
-
 /* =========================
    LIMPEZA AO EDITAR
 ========================== */

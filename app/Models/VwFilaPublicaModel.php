@@ -37,6 +37,8 @@ class VwFilaPublicaModel extends Model
             $resultado[] = [
                 'status' => $row['status'],
                 'nome' => $row['nome'],
+                'cpf' => $row['cpf'],
+                'dt_nascimento' => $row['dt_nascimento'],
                 'fila' => $row['fila'],
                 'posicao' => (int) $row['posicao_fila'],
                 'pacientes_a_frente' => max(0, (int) $row['posicao_fila'] - 1),
