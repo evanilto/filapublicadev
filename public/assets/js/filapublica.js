@@ -4,20 +4,24 @@ let tentativas429 = 0;
 let bloqueioAtivo = false;
 
 document.addEventListener('DOMContentLoaded', () => {
+
+    const input = document.getElementById('codigo');
+
+    input.addEventListener('input', function () {
+        this.value = this.value.replace(/\D/g, '');
+    });
+
     document.getElementById('btnConsultar')
         .addEventListener('click', consultarFila);
 
-    document.getElementById('codigo')
-        .addEventListener('input', limparResultadoAoEditar);
+    input.addEventListener('input', limparResultadoAoEditar);
 
-        // 🔹 ENTER no desktop dispara a consulta
-    document.getElementById('codigo')
-        .addEventListener('keydown', (event) => {
-            if (event.key === 'Enter') {
-                event.preventDefault();
-                document.getElementById('btnConsultar').click();
-            }
-        });
+    input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            document.getElementById('btnConsultar').click();
+        }
+    });
 });
 
 async function consultarFila() {
@@ -134,6 +138,7 @@ function aplicarBackoff(mensagem, retryAfterHeader) {
 function iniciarBloqueio(mensagem, segundos) {
     const erro = document.getElementById('erro');
     const btn = document.getElementById('btnConsultar');
+    const input = document.getElementById('codigo');
 
     bloqueioAtivo = true; // 🔴 BLOQUEIO ATIVO
 
@@ -143,6 +148,7 @@ function iniciarBloqueio(mensagem, segundos) {
 
     let restante = segundos;
     btn.disabled = true;
+    input.disabled = true; // 🔒 BLOQUEIA O CAMPO
 
     erro.classList.remove('d-none');
     erro.innerText = `🔒 ${mensagem} Aguarde ${restante}s.`;
@@ -158,6 +164,7 @@ function iniciarBloqueio(mensagem, segundos) {
             bloqueioAtivo = false; // 🔴 BLOQUEIO ENCERRA
 
             btn.disabled = false;
+            input.disabled = false; // 🔓 LIBERA O CAMPO
             erro.classList.add('d-none');
         } else {
             erro.innerText = `🔒 ${mensagem} Aguarde ${restante}s.`;
